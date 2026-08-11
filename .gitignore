@@ -1,0 +1,35 @@
+# Environment Variables (Secrets)
+.env
+.env.*
+!.env.example
+
+# Python Cache & Compiled Files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE & Code Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database & Dump Files
+*.db
+*.sqlite3
+*.sql
+
+# Logs & Testing
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
