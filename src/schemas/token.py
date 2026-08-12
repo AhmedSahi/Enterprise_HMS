@@ -12,3 +12,6 @@ class TokenPayload(BaseModel):
     
     sub: str | None = Field(default=None, description="Subject (User Email or ID)")
     exp: int | None = Field(default=None, description="Expiration timestamp")
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
