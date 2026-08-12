@@ -34,7 +34,7 @@ The system enforces Role-Based Access Control (RBAC), JWT authentication, user p
 
 ---
 
-##  Current Directory Structure
+## Current Directory Structure
 
 ```text
 ENTERPRISE_IAM/
@@ -49,4 +49,5 @@ ENTERPRISE_IAM/
 ├── .gitignore            # Git exclusion definitions
 ├── alembic.ini           # Alembic configuration file
 ├── main.py               # FastAPI application entry point
+├── HMS_Schema.png        # Complete database schema diagram
 └── requirements.txt      # Project Python dependencies
