@@ -40,10 +40,30 @@ The system enforces Role-Based Access Control (RBAC), JWT authentication, user p
 ENTERPRISE_IAM/
 ├── alembic/              # Alembic database migrations and versions
 ├── src/                  # Application source code
-│   ├── core/             # Security, tokens, and core configurations
-│   ├── db/               # Database connection and session management
+│   ├── core/             # Core configurations, database connection, and security
+│   │   ├── config.py
+│   │   ├── database.py
+│   │   └── security.py
+│   ├── db/               # Database seeding and initial data
+│   │   ├── seed_data.json
+│   │   └── seed.py
 │   ├── models/           # SQLAlchemy database models
-│   └── schemas/          # Pydantic data validation models
+│   │   ├── audit.py
+│   │   ├── base.py
+│   │   ├── billing.py
+│   │   ├── blood_bank.py
+│   │   ├── clinical.py
+│   │   ├── profile.py
+│   │   ├── role.py
+│   │   └── user.py
+│   └── schemas/           # Pydantic data validation schemas
+│       ├── billing.py
+│       ├── blood_bank.py
+│       ├── clinical.py
+│       ├── profile.py
+│       ├── role.py
+│       ├── token.py
+│       └── user.py
 ├── .env                  # Environment secrets (Git-ignored)
 ├── .env.example          # Sample environment variables configuration
 ├── .gitignore            # Git exclusion definitions
