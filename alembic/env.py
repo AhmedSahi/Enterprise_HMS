@@ -10,17 +10,56 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 from alembic import context
 
-# 1. Apne project ka Base aur saare models import karein
-from src.models.base import Base
-from src.models.user import User, RefreshToken
-from src.models.role import Role, Permission
-from src.models.audit import AuditLog
-from src.core.config import settings
+# import your models here to ensure they are registered with SQLAlchemy's metadata
 
-from src.models.profile import DoctorProfile, PatientProfile
-from src.models.clinical import Department, Appointment, Prescription
-from src.models.billing import Invoice, Payment
-from src.models.blood_bank import BloodRequest
+from src.models.IAM import User, Role, Permission, RefreshToken, AuditLog
+from src.models.base import Base
+from src.models.blood_bank import BloodInventory, BloodRequest
+
+from src.models.profile import (
+    UserProfile, 
+    UserContact, 
+    StaffDetails, 
+    PatientDetails, 
+    PatientMedicalHistory, 
+    PatientAllergy, 
+    Allergen
+)
+
+from src.models.infrastructure import ( 
+    Department, 
+    Ward, 
+    Bed, 
+    OperationTheater, 
+    Room, 
+    BedTransfer
+) 
+
+from src.models.billing import (
+    Invoice,
+    InvoiceItem, 
+    Payment,  
+    InsuranceProvider, 
+    PatientInsurance
+)
+
+from src.models.clinical import (
+    Appointment, 
+    DoctorSchedule,
+    Admission, 
+    DischargeSummary, 
+    VitalsLog, 
+    OTSchedule, 
+    OTTeamMember,
+    Diagnosis,
+    Prescription,
+    PrescriptionItem
+)   
+
+from src.models.pharmacy import (
+    Medication, 
+    MedicationBatch  
+) 
 
 config = context.config
 

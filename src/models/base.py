@@ -1,10 +1,11 @@
-from datetime import datetime
-from sqlalchemy import Column, DateTime
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, DateTime, func
+from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
+
 class TimestampMixin:
-    """Mixin to add creation and update timestamps to models."""
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    """Adds created_at / updated_at columns to any model that inherits it."""
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
