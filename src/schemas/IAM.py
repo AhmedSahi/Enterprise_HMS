@@ -3,16 +3,40 @@ MODULE 1 SCHEMAS: IAM & Security
 Covers: signup/login, JWT tokens, roles, permissions, RBAC assignment, audit logs.
 """
 import re
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
+from src.models.profile import GenderEnum
+from src.schemas.profile import UserContactResponse, UserProfileResponse
 
-# ---------- Users / Auth ----------
-class UserCreate(BaseModel):
-    """Secure schema for user signup with strict password validation."""
 
-    email: EmailStr = Field(..., description="User email address", examples=["hafiz@example.com"])
+# ---------- Password validation (shared) ----------
+def _validate_password_complexity(value: str) -> str:
+    """Enforce strict password complexity for security. Shared by signup schemas."""
+    if not re.search(r"[A-Z]", value):
+        raise ValueError("Password must contain at least one uppercase letter (A-Z).")
+    if not re.search(r"[a-z]", value):
+        raise ValueError("Password must contain at least one lowercase letter (a-z).")
+    if not re.search(r"\d", value):
+        raise ValueError("Password must contain at least one digit (0-9).")
+    if not re.search(r"[@$!%*?&]", value):
+        raise ValueError("Password must contain at least one special character (@$!%*?&).")
+    return value
+
+
+# ---------- Signup (atomic: User + UserProfile + UserContact together) ----------
+class UserSignupRequest(BaseModel):
+    """
+    Single-request signup payload. Creates the User, UserProfile, and
+    UserContact rows together in one DB transaction — there is intentionally
+    NO separate 'create profile' or 'create contact' endpoint, since a user
+    should never exist without this core identity/contact data in a
+    hospital-grade system.
+    """
+
+    # --- Account credentials ---
+    email: EmailStr = Field(..., description="User email address (used for login)", examples=["hafiz@example.com"])
     password: str = Field(
         ...,
         min_length=8,
@@ -20,19 +44,53 @@ class UserCreate(BaseModel):
         description="Must contain uppercase, lowercase, number, and special character.",
     )
 
+    # --- Identity (-> user_profiles) ---
+    first_name: str = Field(..., max_length=100, examples=["Hafiz"])
+    last_name: str = Field(..., max_length=100, examples=["Sahi"])
+    gender: GenderEnum
+    dob: date = Field(..., description="Date of birth, format YYYY-MM-DD")
+    cnic: str | None = Field(default=None, max_length=20, description="National ID number, optional")
+
+    # --- Contact (-> user_contacts) ---
+    primary_phone: str = Field(..., max_length=20, description="Primary contact number, required")
+    secondary_phone: str | None = Field(default=None, max_length=20)
+    address: str | None = None
+    emergency_name: str | None = Field(default=None, max_length=150)
+    emergency_phone: str | None = Field(default=None, max_length=20)
+
     @field_validator("password")
     @classmethod
     def validate_password_complexity(cls, value: str) -> str:
-        """Enforce strict password complexity for security."""
-        if not re.search(r"[A-Z]", value):
-            raise ValueError("Password must contain at least one uppercase letter (A-Z).")
-        if not re.search(r"[a-z]", value):
-            raise ValueError("Password must contain at least one lowercase letter (a-z).")
-        if not re.search(r"\d", value):
-            raise ValueError("Password must contain at least one digit (0-9).")
-        if not re.search(r"[@$!%*?&]", value):
-            raise ValueError("Password must contain at least one special character (@$!%*?&).")
-        return value
+        return _validate_password_complexity(value)
+
+
+class UserSignupResponse(BaseModel):
+    """Full response after signup: account + the profile/contact created alongside it."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: EmailStr
+    is_active: bool
+    created_at: datetime
+    profile: UserProfileResponse
+    contact: UserContactResponse
+
+
+# ---------- Users / Auth ----------
+class UserCreate(BaseModel):
+    """
+    Minimal account-only schema — kept for internal/admin use only
+    (e.g. seeding a system user). Regular signup MUST use UserSignupRequest.
+    """
+
+    email: EmailStr = Field(..., description="User email address", examples=["hafiz@example.com"])
+    password: str = Field(..., min_length=8, max_length=64)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_complexity(cls, value: str) -> str:
+        return _validate_password_complexity(value)
 
 
 class UserLogin(BaseModel):
