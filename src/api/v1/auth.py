@@ -76,7 +76,7 @@ def signup(payload: UserSignupRequest, request: Request, db: Session = Depends(g
 
     try:
         # Step 1: create the auth identity
-        user = User(email=payload.email, hashed_password=hash_password(payload.password))
+        user = User(email=payload.email, hashed_password=get_password_hash(payload.password))
         db.add(user)
         db.flush()  # assigns user.id WITHOUT committing, so we can use it below
 

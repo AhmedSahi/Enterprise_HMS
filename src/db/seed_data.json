@@ -1,0 +1,311 @@
+{
+  "POST /api/v1/auth/signup — admin user": {
+    "request_body": {
+      "email": "admin@hms.com",
+      "password": "Admin123!",
+      "first_name": "Ayesha",
+      "last_name": "Khan",
+      "gender": "female",
+      "dob": "1990-03-15",
+      "cnic": "35202-1234567-1",
+      "primary_phone": "03001234567",
+      "secondary_phone": "03211234567",
+      "address": "House 12, Street 5, Gulberg, Lahore",
+      "emergency_name": "Bilal Khan",
+      "emergency_phone": "03007654321"
+    }
+  },
+  "POST /api/v1/auth/signup — doctor user (minimal, optional fields omitted)": {
+    "request_body": {
+      "email": "dr.hafiz@hms.com",
+      "password": "Doctor456!",
+      "first_name": "Hafiz",
+      "last_name": "Sahi",
+      "gender": "male",
+      "dob": "1988-07-22",
+      "primary_phone": "03211112233"
+    }
+  },
+  "POST /api/v1/auth/signup — receptionist user": {
+    "request_body": {
+      "email": "reception@hms.com",
+      "password": "Front789!",
+      "first_name": "Sara",
+      "last_name": "Ahmed",
+      "gender": "female",
+      "dob": "1995-11-02",
+      "cnic": "35201-4567891-3",
+      "primary_phone": "03451237890",
+      "address": "DHA Phase 5, Lahore"
+    }
+  },
+  "POST /api/v1/auth/signup — INVALID (weak password, should return 422)": {
+    "request_body": {
+      "email": "weak@hms.com",
+      "password": "weak",
+      "first_name": "Test",
+      "last_name": "User",
+      "gender": "male",
+      "dob": "2000-01-01",
+      "primary_phone": "03000000000"
+    },
+    "note": "password fails complexity rules -> expect 422 Unprocessable Entity"
+  },
+  "POST /api/v1/auth/login — valid credentials": {
+    "request_body": {
+      "email": "admin@hms.com",
+      "password": "Admin123!"
+    }
+  },
+  "POST /api/v1/auth/login — INVALID (wrong password, should return 401)": {
+    "request_body": {
+      "email": "admin@hms.com",
+      "password": "WrongPassword1!"
+    },
+    "note": "expect 401 Unauthorized"
+  },
+  "POST /api/v1/auth/refresh": {
+    "request_body": {
+      "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.SAMPLE_REFRESH_PAYLOAD.SAMPLE_SIGNATURE"
+    },
+    "note": "Use the real refresh_token returned by /auth/login in practice"
+  },
+  "POST /api/v1/auth/logout": {
+    "request_body": {
+      "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.SAMPLE_REFRESH_PAYLOAD.SAMPLE_SIGNATURE"
+    },
+    "note": "Requires header: Authorization: Bearer <access_token>"
+  },
+  "GET /api/v1/users/me": {
+    "note": "No request body. Requires header: Authorization: Bearer <access_token>"
+  },
+  "GET /api/v1/users": {
+    "query_params": {
+      "skip": 0,
+      "limit": 100
+    },
+    "note": "Requires permission: iam:view_users"
+  },
+  "GET /api/v1/users/{user_id}": {
+    "path_params": {
+      "user_id": 1
+    },
+    "note": "Requires permission: iam:view_users"
+  },
+  "PATCH /api/v1/users/{user_id} — deactivate": {
+    "request_body": {
+      "is_active": false
+    },
+    "path_params": {
+      "user_id": 3
+    },
+    "note": "Requires permission: iam:manage_users"
+  },
+  "PATCH /api/v1/users/{user_id} — reactivate": {
+    "request_body": {
+      "is_active": true
+    },
+    "path_params": {
+      "user_id": 3
+    },
+    "note": "Requires permission: iam:manage_users"
+  },
+  "DELETE /api/v1/users/{user_id}": {
+    "path_params": {
+      "user_id": 3
+    },
+    "note": "Soft-delete (sets is_active=False). Requires permission: iam:manage_users"
+  },
+  "GET /api/v1/users/{user_id}/profile": {
+    "path_params": {
+      "user_id": 1
+    }
+  },
+  "PATCH /api/v1/users/{user_id}/profile — self update": {
+    "request_body": {
+      "first_name": "Ayesha",
+      "last_name": "Malik",
+      "cnic": "35202-1234567-1"
+    },
+    "path_params": {
+      "user_id": 1
+    },
+    "note": "Own profile: no special permission needed. Someone else's: requires iam:manage_users"
+  },
+  "PATCH /api/v1/users/{user_id}/profile — partial update (only dob)": {
+    "request_body": {
+      "dob": "1990-03-16"
+    },
+    "path_params": {
+      "user_id": 1
+    }
+  },
+  "GET /api/v1/users/{user_id}/contact": {
+    "path_params": {
+      "user_id": 1
+    }
+  },
+  "PATCH /api/v1/users/{user_id}/contact — update phone and address": {
+    "request_body": {
+      "primary_phone": "03009998888",
+      "address": "New address, Johar Town, Lahore"
+    },
+    "path_params": {
+      "user_id": 1
+    }
+  },
+  "PATCH /api/v1/users/{user_id}/contact — update emergency contact only": {
+    "request_body": {
+      "emergency_name": "Zainab Khan",
+      "emergency_phone": "03331112222"
+    },
+    "path_params": {
+      "user_id": 1
+    }
+  },
+  "POST /api/v1/roles — admin role": {
+    "request_body": {
+      "name": "admin",
+      "description": "Full system access"
+    },
+    "note": "Requires permission: iam:manage_roles"
+  },
+  "POST /api/v1/roles — doctor role": {
+    "request_body": {
+      "name": "doctor",
+      "description": "Medical staff who consult patients"
+    },
+    "note": "Requires permission: iam:manage_roles"
+  },
+  "POST /api/v1/roles — receptionist role": {
+    "request_body": {
+      "name": "receptionist",
+      "description": "Front-desk staff handling registration and appointments"
+    },
+    "note": "Requires permission: iam:manage_roles"
+  },
+  "POST /api/v1/roles — INVALID (duplicate name, should return 400)": {
+    "request_body": {
+      "name": "admin",
+      "description": "Duplicate attempt"
+    },
+    "note": "expect 400 Bad Request: Role already exists"
+  },
+  "GET /api/v1/roles": {
+    "note": "No request body"
+  },
+  "GET /api/v1/roles/{role_id}": {
+    "path_params": {
+      "role_id": 1
+    }
+  },
+  "PATCH /api/v1/roles/{role_id}": {
+    "request_body": {
+      "name": "admin",
+      "description": "Full system access - updated description"
+    },
+    "path_params": {
+      "role_id": 1
+    },
+    "note": "Requires permission: iam:manage_roles"
+  },
+  "DELETE /api/v1/roles/{role_id}": {
+    "path_params": {
+      "role_id": 3
+    },
+    "note": "Requires permission: iam:manage_roles"
+  },
+  "POST /api/v1/roles/assign": {
+    "request_body": {
+      "user_id": 2,
+      "role_id": 2
+    },
+    "note": "Assigns role_id=2 (doctor) to user_id=2. Requires permission: iam:manage_roles"
+  },
+  "DELETE /api/v1/roles/unassign": {
+    "request_body": {
+      "user_id": 2,
+      "role_id": 2
+    },
+    "note": "Requires permission: iam:manage_roles"
+  },
+  "POST /api/v1/permissions — manage roles": {
+    "request_body": {
+      "name": "Manage Roles",
+      "code": "iam:manage_roles"
+    },
+    "note": "Requires permission: iam:manage_permissions"
+  },
+  "POST /api/v1/permissions — manage users": {
+    "request_body": {
+      "name": "Manage Users",
+      "code": "iam:manage_users"
+    },
+    "note": "Requires permission: iam:manage_permissions"
+  },
+  "POST /api/v1/permissions — view audit logs": {
+    "request_body": {
+      "name": "View Audit Logs",
+      "code": "iam:view_audit_logs"
+    },
+    "note": "Requires permission: iam:manage_permissions"
+  },
+  "POST /api/v1/permissions — INVALID (duplicate code, should return 400)": {
+    "request_body": {
+      "name": "Manage Roles Duplicate",
+      "code": "iam:manage_roles"
+    },
+    "note": "expect 400 Bad Request: Permission code already exists"
+  },
+  "GET /api/v1/permissions": {
+    "note": "No request body"
+  },
+  "GET /api/v1/permissions/{permission_id}": {
+    "path_params": {
+      "permission_id": 1
+    }
+  },
+  "DELETE /api/v1/permissions/{permission_id}": {
+    "path_params": {
+      "permission_id": 4
+    },
+    "note": "Requires permission: iam:manage_permissions"
+  },
+  "POST /api/v1/permissions/assign": {
+    "request_body": {
+      "role_id": 1,
+      "permission_id": 1
+    },
+    "note": "Grants permission_id=1 (iam:manage_roles) to role_id=1 (admin). Requires permission: iam:manage_permissions"
+  },
+  "DELETE /api/v1/permissions/unassign": {
+    "request_body": {
+      "role_id": 1,
+      "permission_id": 1
+    },
+    "note": "Requires permission: iam:manage_permissions"
+  },
+  "GET /api/v1/audit-logs": {
+    "query_params": {
+      "skip": 0,
+      "limit": 50,
+      "user_id": null,
+      "action": null
+    },
+    "note": "Requires permission: iam:view_audit_logs. Filters are optional."
+  },
+  "GET /api/v1/audit-logs (filtered by action)": {
+    "query_params": {
+      "action": "user_login",
+      "skip": 0,
+      "limit": 50
+    },
+    "note": "Requires permission: iam:view_audit_logs"
+  },
+  "GET /api/v1/audit-logs/{log_id}": {
+    "path_params": {
+      "log_id": 1
+    },
+    "note": "Requires permission: iam:view_audit_logs"
+  }
+}

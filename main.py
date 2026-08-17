@@ -3,6 +3,8 @@ from src.api.v1 import audit
 from src.core.database import engine
 from src.models.base import Base
 
+import src.models
+
 from src.api.v1 import users, auth, roles, permissions
 
 # FastAPI app initialize karein
