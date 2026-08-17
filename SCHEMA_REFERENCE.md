@@ -1,6 +1,6 @@
 # Enterprise HMS - Schema Quick Reference
 
-## 🎯 Core Entity Relationships
+##  Core Entity Relationships
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -37,7 +37,7 @@
 
 ---
 
-## 🏥 Hospital Infrastructure
+##  Hospital Infrastructure
 
 ```
 DEPARTMENTS
@@ -64,7 +64,7 @@ DEPARTMENTS
 
 ---
 
-## 👨‍⚕️ Clinical Operations
+##  Clinical Operations
 
 ```
 APPOINTMENTS (OPD)
@@ -95,7 +95,7 @@ DOCTOR_SCHEDULES
 
 ---
 
-## 💊 Pharmacy & Medications
+##  Pharmacy & Medications
 
 ```
 MEDICATIONS
@@ -107,7 +107,7 @@ MEDICATIONS
 
 ---
 
-## 💰 Billing & Finance
+##  Billing & Finance
 
 ```
 INVOICES
@@ -126,7 +126,7 @@ PATIENT_INSURANCE
 
 ---
 
-## 🩸 Blood Bank
+##  Blood Bank
 
 ```
 BLOOD_INVENTORY
@@ -140,7 +140,7 @@ BLOOD_REQUESTS
 
 ---
 
-## 📊 Key Cardinalities
+##  Key Cardinalities
 
 | Relationship | Pattern | Example |
 |--------------|---------|---------|
@@ -157,7 +157,7 @@ BLOOD_REQUESTS
 
 ---
 
-## 🔐 RBAC Hierarchy
+##  RBAC Hierarchy
 
 ```
 ROLES:
@@ -192,7 +192,7 @@ PERMISSIONS (examples):
 
 ---
 
-## 📋 State Machines
+##  State Machines
 
 ### Appointment
 ```
@@ -226,7 +226,7 @@ AVAILABLE ↔ IN_USE ↔ MAINTENANCE
 
 ---
 
-## 🔍 Quick Data Access Patterns
+##  Quick Data Access Patterns
 
 ### Find Patient Info
 ```
@@ -277,7 +277,7 @@ BLOOD_REQUESTS
 
 ---
 
-## ⚡ Important Constraints
+##  Important Constraints
 
 ### Database-Level (CHECK)
 1. **Bed Location** (beds table):
@@ -303,7 +303,7 @@ BLOOD_REQUESTS
 
 ---
 
-## 📈 Scalability Considerations
+##  Scalability Considerations
 
 | Table | Expected Volume | Optimization |
 |-------|-----------------|---------------|
@@ -317,7 +317,7 @@ BLOOD_REQUESTS
 
 ---
 
-## 🎯 Common Queries
+##  Common Queries
 
 ### Active Staff by Department
 ```sql
