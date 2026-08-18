@@ -4,7 +4,7 @@ Covers: identity, contact, staff/patient metadata, allergies, medical history.
 """
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.models.profile import (
     AllergenCategoryEnum,
@@ -13,6 +13,9 @@ from src.models.profile import (
     MedicalHistoryStatusEnum,
     StaffTypeEnum,
 )
+
+# A blood group is always one of A/B/AB/O followed by + or -, e.g. "O+", "AB-".
+BLOOD_GROUP_PATTERN = r"^(A|B|AB|O)[+-]$"
 
 
 # ---------- Common identity ----------
@@ -84,6 +87,23 @@ class StaffDetailsCreate(BaseModel):
     license_number: str | None = Field(default=None, max_length=100)
     consultation_fee: float | None = Field(default=None, gt=0)
 
+    @model_validator(mode="after")
+    def validate_doctor_only_fields(self) -> "StaffDetailsCreate":
+        """
+        specialization / license_number / consultation_fee only make sense
+        for staff_type == DOCTOR. Doctors MUST provide a license_number;
+        non-doctors must NOT provide any of these (prevents inconsistent data
+        like a receptionist with a 'consultation_fee').
+        """
+        is_doctor = self.staff_type == StaffTypeEnum.DOCTOR
+        if is_doctor and not self.license_number:
+            raise ValueError("license_number is required when staff_type is 'doctor'.")
+        if not is_doctor and (self.specialization or self.license_number or self.consultation_fee):
+            raise ValueError(
+                "specialization, license_number, and consultation_fee are only valid when staff_type is 'doctor'."
+            )
+        return self
+
 
 class StaffDetailsUpdate(BaseModel):
     department_id: int | None = None
@@ -108,11 +128,13 @@ class StaffDetailsResponse(BaseModel):
 class PatientDetailsCreate(BaseModel):
     user_id: int
     patient_code: str = Field(..., max_length=50, description="Medical Record Number (MRN)")
-    blood_group: str = Field(..., max_length=5)
+    blood_group: str = Field(
+        ..., pattern=BLOOD_GROUP_PATTERN, description="One of: A+, A-, B+, B-, AB+, AB-, O+, O-", examples=["O+"]
+    )
 
 
 class PatientDetailsUpdate(BaseModel):
-    blood_group: str | None = Field(default=None, max_length=5)
+    blood_group: str | None = Field(default=None, pattern=BLOOD_GROUP_PATTERN, examples=["O+"])
 
 
 class PatientDetailsResponse(BaseModel):

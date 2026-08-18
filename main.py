@@ -5,11 +5,18 @@ from src.models.base import Base
 
 import src.models
 
-from src.api.v1 import users, auth, roles, permissions
+from src.api.v1 import (
+    users, 
+    auth, 
+    roles, 
+    permissions,
+    staff_patients,
+    infrastructure
+)
 
 # FastAPI app initialize karein
 app = FastAPI(
-    title="Enterprise IAM API",
+    title="Enterprise HMS API",
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
@@ -21,3 +28,5 @@ app.include_router(users.router, prefix="/api/v1")
 app.include_router(roles.router, prefix="/api/v1")
 app.include_router(permissions.router, prefix="/api/v1")
 app.include_router(audit.router, prefix="/api/v1")
+app.include_router(staff_patients.router, prefix="/api/v1")
+app.include_router(infrastructure.router, prefix="/api/v1")
