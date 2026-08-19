@@ -10,12 +10,27 @@ Design notes:
       never both — this is enforced explicitly below, since the DB schema
       alone (two independent unique FKs) does not prevent one user from
       having both.
+    - IMPORTANT — clinical data access scoping: a permission like
+      `profiles:manage_medical_history` only proves someone is the KIND of
+      user who is allowed to touch medical history AT ALL (e.g. any doctor).
+      It does NOT mean they should see every patient in the hospital. Real
+      hospitals scope clinical records (allergies, medical history) to
+      "need to know": the patient themself, their TREATING doctor (someone
+      with an appointment or admission linking them to this specific
+      patient), or someone holding the broader `clinical:view_all_patient_records`
+      override (e.g. a medical director, or the superuser). This is enforced
+      by `_assert_clinical_access` below and applied to every allergy/medical
+      history read and write endpoint. Basic administrative patient data
+      (MRN, blood group — see `/patients` endpoints) is intentionally NOT
+      scoped this way, since reception/billing staff legitimately need to
+      look up any patient by MRN for non-clinical purposes.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from src.core.database import get_db
 from src.core.dependencies import RequirePermission, get_current_user
+from src.models.clinical import Admission, Appointment
 from src.models.IAM import User
 from src.models.profile import (
     Allergen,
@@ -23,6 +38,7 @@ from src.models.profile import (
     PatientDetails,
     PatientMedicalHistory,
     StaffDetails,
+    StaffTypeEnum,
 )
 from src.schemas.IAM import MessageResponse
 from src.schemas.profile import (
@@ -63,6 +79,66 @@ def _assert_no_dual_role(db: Session, user_id: int) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This user already has a patient profile and cannot also have a staff profile.",
         )
+
+
+def _has_treated_patient(db: Session, doctor_staff_id: int, patient_id: int) -> bool:
+    """True if this doctor has at least one appointment or admission tying them to this patient."""
+    has_appointment = (
+        db.query(Appointment)
+        .filter(Appointment.doctor_id == doctor_staff_id, Appointment.patient_id == patient_id)
+        .first()
+        is not None
+    )
+    if has_appointment:
+        return True
+    return (
+        db.query(Admission)
+        .filter(Admission.admitted_by_doctor_id == doctor_staff_id, Admission.patient_id == patient_id)
+        .first()
+        is not None
+    )
+
+
+def _assert_clinical_access(db: Session, current_user: User, patient_id: int) -> None:
+    """
+    Guards access to sensitive clinical data (allergies, medical history) for one
+    specific patient. Allowed if the caller is:
+      1. A superuser, or
+      2. Holds the `clinical:view_all_patient_records` override permission, or
+      3. IS the patient themself, or
+      4. Is a doctor who has actually treated this patient (has an appointment
+         or admission linking them to this patient_id).
+    Everyone else gets 403, even if they hold a general "manage_medical_history"
+    style permission — that permission only proves they're the RIGHT KIND of
+    user, not that they're allowed to see THIS patient.
+    """
+    if current_user.is_superuser:
+        return
+
+    granted_codes = {permission.code for role in current_user.roles for permission in role.permissions}
+    if "clinical:view_all_patient_records" in granted_codes:
+        return
+
+    patient = db.get(PatientDetails, patient_id)
+    if patient is not None and patient.user_id == current_user.id:
+        return  # patients can always see their own records
+
+    staff = (
+        db.query(StaffDetails)
+        .filter(StaffDetails.user_id == current_user.id, StaffDetails.staff_type == StaffTypeEnum.DOCTOR)
+        .first()
+    )
+    if staff is not None and _has_treated_patient(db, staff.id, patient_id):
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(
+            "You do not have access to this patient's clinical records. "
+            "Only the patient themself, their treating doctor, or a holder of "
+            "'clinical:view_all_patient_records' may view or edit this data."
+        ),
+    )
 
 
 # =========================================================================
@@ -296,14 +372,23 @@ def list_allergens(db: Session = Depends(get_db), current_user: User = Depends(g
     response_model=PatientAllergyResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Record an allergy for a patient",
+    description=(
+        "Requires the `profiles:manage_patient_allergies` permission AND that the caller is "
+        "either the patient's treating doctor, the patient themself, or holds "
+        "`clinical:view_all_patient_records`."
+    ),
     dependencies=[Depends(RequirePermission("profiles:manage_patient_allergies"))],
     responses={
         400: {"description": "This allergy is already recorded for this patient"},
+        403: {"description": "Caller is not this patient's treating doctor"},
         404: {"description": "Patient or allergen not found"},
     },
 )
 def add_patient_allergy(
-    patient_id: int, payload: PatientAllergyCreate, db: Session = Depends(get_db)
+    patient_id: int,
+    payload: PatientAllergyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> PatientAllergy:
     if payload.patient_id != patient_id:
         raise HTTPException(
@@ -312,6 +397,8 @@ def add_patient_allergy(
         )
     if db.get(PatientDetails, patient_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+    _assert_clinical_access(db, current_user, patient_id)
+
     if db.get(Allergen, payload.allergen_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Allergen not found")
 
@@ -334,13 +421,15 @@ def add_patient_allergy(
     "/patients/{patient_id}/allergies",
     response_model=list[PatientAllergyResponse],
     summary="List a patient's recorded allergies",
-    responses={404: {"description": "Patient not found"}},
+    description="Restricted to the patient themself, their treating doctor, or an admin-level override.",
+    responses={403: {"description": "Caller is not this patient's treating doctor"}, 404: {"description": "Patient not found"}},
 )
 def list_patient_allergies(
     patient_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ) -> list[PatientAllergy]:
     if db.get(PatientDetails, patient_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+    _assert_clinical_access(db, current_user, patient_id)
     return db.query(PatientAllergy).filter(PatientAllergy.patient_id == patient_id).all()
 
 
@@ -349,12 +438,16 @@ def list_patient_allergies(
     response_model=MessageResponse,
     summary="Remove a recorded patient allergy",
     dependencies=[Depends(RequirePermission("profiles:manage_patient_allergies"))],
-    responses={404: {"description": "Allergy record not found"}},
+    responses={403: {"description": "Caller is not this patient's treating doctor"}, 404: {"description": "Allergy record not found"}},
 )
-def delete_patient_allergy(allergy_id: int, db: Session = Depends(get_db)) -> MessageResponse:
+def delete_patient_allergy(
+    allergy_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> MessageResponse:
     allergy = db.get(PatientAllergy, allergy_id)
     if allergy is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Allergy record not found")
+    _assert_clinical_access(db, current_user, allergy.patient_id)
+
     db.delete(allergy)
     db.commit()
     return MessageResponse(message=f"Allergy record {allergy_id} removed")
@@ -368,11 +461,15 @@ def delete_patient_allergy(allergy_id: int, db: Session = Depends(get_db)) -> Me
     response_model=PatientMedicalHistoryResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Add a medical history entry for a patient",
+    description="Requires that the caller is this patient's treating doctor, the patient, or holds the admin override.",
     dependencies=[Depends(RequirePermission("profiles:manage_medical_history"))],
-    responses={404: {"description": "Patient not found"}},
+    responses={403: {"description": "Caller is not this patient's treating doctor"}, 404: {"description": "Patient not found"}},
 )
 def add_medical_history(
-    patient_id: int, payload: PatientMedicalHistoryCreate, db: Session = Depends(get_db)
+    patient_id: int,
+    payload: PatientMedicalHistoryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> PatientMedicalHistory:
     if payload.patient_id != patient_id:
         raise HTTPException(
@@ -381,6 +478,7 @@ def add_medical_history(
         )
     if db.get(PatientDetails, patient_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+    _assert_clinical_access(db, current_user, patient_id)
 
     entry = PatientMedicalHistory(**payload.model_dump())
     db.add(entry)
@@ -393,13 +491,15 @@ def add_medical_history(
     "/patients/{patient_id}/medical-history",
     response_model=list[PatientMedicalHistoryResponse],
     summary="List a patient's medical history",
-    responses={404: {"description": "Patient not found"}},
+    description="Restricted to the patient themself, their treating doctor, or an admin-level override.",
+    responses={403: {"description": "Caller is not this patient's treating doctor"}, 404: {"description": "Patient not found"}},
 )
 def list_medical_history(
     patient_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ) -> list[PatientMedicalHistory]:
     if db.get(PatientDetails, patient_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+    _assert_clinical_access(db, current_user, patient_id)
     return db.query(PatientMedicalHistory).filter(PatientMedicalHistory.patient_id == patient_id).all()
 
 
@@ -408,14 +508,18 @@ def list_medical_history(
     response_model=PatientMedicalHistoryResponse,
     summary="Update a medical history entry (e.g. mark resolved)",
     dependencies=[Depends(RequirePermission("profiles:manage_medical_history"))],
-    responses={404: {"description": "Medical history entry not found"}},
+    responses={403: {"description": "Caller is not this patient's treating doctor"}, 404: {"description": "Medical history entry not found"}},
 )
 def update_medical_history(
-    entry_id: int, payload: PatientMedicalHistoryUpdate, db: Session = Depends(get_db)
+    entry_id: int,
+    payload: PatientMedicalHistoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> PatientMedicalHistory:
     entry = db.get(PatientMedicalHistory, entry_id)
     if entry is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medical history entry not found")
+    _assert_clinical_access(db, current_user, entry.patient_id)
 
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(entry, field, value)

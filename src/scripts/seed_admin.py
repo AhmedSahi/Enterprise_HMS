@@ -25,11 +25,27 @@ SUPERUSER_EMAIL = "superadmin@hms.com"
 SUPERUSER_PASSWORD = "SuperAdmin123!"
 
 DEFAULT_PERMISSIONS = [
+    # Module 1: IAM
     ("Manage Users", "iam:manage_users"),
     ("View Users", "iam:view_users"),
     ("Manage Roles", "iam:manage_roles"),
     ("Manage Permissions", "iam:manage_permissions"),
     ("View Audit Logs", "iam:view_audit_logs"),
+    # Module 2: Profiles (Staff & Patients)
+    ("Manage Staff Profiles", "profiles:manage_staff"),
+    ("View Staff Profiles", "profiles:view_staff"),
+    ("Manage Patient Profiles", "profiles:manage_patients"),
+    ("View Patient Profiles", "profiles:view_patients"),
+    ("Manage Allergens", "profiles:manage_allergens"),
+    ("Manage Patient Allergies", "profiles:manage_patient_allergies"),
+    ("Manage Medical History", "profiles:manage_medical_history"),
+    ("View All Patient Clinical Records (override)", "clinical:view_all_patient_records"),
+    # Module 3: Hospital Infrastructure
+    ("Manage Departments", "infrastructure:manage_departments"),
+    ("Manage Wards", "infrastructure:manage_wards"),
+    ("Manage Rooms", "infrastructure:manage_rooms"),
+    ("Manage Beds", "infrastructure:manage_beds"),
+    ("Manage Operation Theaters", "infrastructure:manage_ot"),
 ]
 
 
