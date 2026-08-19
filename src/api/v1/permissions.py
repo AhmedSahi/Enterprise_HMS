@@ -48,34 +48,7 @@ def list_permissions(db: Session = Depends(get_db)) -> list[Permission]:
     return db.query(Permission).all()
 
 
-@router.get(
-    "/{permission_id}",
-    response_model=PermissionResponse,
-    summary="Get a single permission",
-    responses={404: {"description": "Permission not found"}},
-)
-def get_permission(permission_id: int, db: Session = Depends(get_db)) -> Permission:
-    return _get_permission_or_404(db, permission_id)
 
-
-@router.delete(
-    "/{permission_id}",
-    response_model=MessageResponse,
-    summary="Delete a permission",
-    description="Permanently deletes a permission code. Roles holding it will simply lose it (link table cascades).",
-    dependencies=[Depends(RequirePermission("iam:manage_permissions"))],
-    responses={404: {"description": "Permission not found"}},
-)
-def delete_permission(permission_id: int, db: Session = Depends(get_db)) -> MessageResponse:
-    permission = _get_permission_or_404(db, permission_id)
-    db.delete(permission)
-    db.commit()
-    return MessageResponse(message=f"Permission {permission_id} deleted")
-
-
-# =========================================================================
-# Assignment: attach/detach a permission to/from a role
-# =========================================================================
 @router.post(
     "/assign",
     response_model=MessageResponse,
@@ -112,3 +85,29 @@ def unassign_permission(payload: AssignPermissionRequest, db: Session = Depends(
         role.permissions.remove(permission)
         db.commit()
     return MessageResponse(message=f"Permission '{permission.code}' revoked from role '{role.name}'")
+
+
+
+@router.get(
+    "/{permission_id}",
+    response_model=PermissionResponse,
+    summary="Get a single permission",
+    responses={404: {"description": "Permission not found"}},
+)
+def get_permission(permission_id: int, db: Session = Depends(get_db)) -> Permission:
+    return _get_permission_or_404(db, permission_id)
+
+
+@router.delete(
+    "/{permission_id}",
+    response_model=MessageResponse,
+    summary="Delete a permission",
+    description="Permanently deletes a permission code. Roles holding it will simply lose it (link table cascades).",
+    dependencies=[Depends(RequirePermission("iam:manage_permissions"))],
+    responses={404: {"description": "Permission not found"}},
+)
+def delete_permission(permission_id: int, db: Session = Depends(get_db)) -> MessageResponse:
+    permission = _get_permission_or_404(db, permission_id)
+    db.delete(permission)
+    db.commit()
+    return MessageResponse(message=f"Permission {permission_id} deleted")

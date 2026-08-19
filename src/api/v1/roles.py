@@ -54,6 +54,46 @@ def list_roles(db: Session = Depends(get_db)) -> list[Role]:
     return db.query(Role).all()
 
 
+
+@router.post(
+    "/assign",
+    response_model=MessageResponse,
+    summary="Assign a role to a user",
+    dependencies=[Depends(RequirePermission("iam:manage_roles"))],
+    responses={404: {"description": "User or role not found"}},
+)
+def assign_role(payload: AssignRoleRequest, db: Session = Depends(get_db)) -> MessageResponse:
+    user = db.get(User, payload.user_id)
+    role = _get_role_or_404(db, payload.role_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if role not in user.roles:
+        user.roles.append(role)
+        db.commit()
+    return MessageResponse(message=f"Role '{role.name}' assigned to user {user.id}")
+
+
+@router.delete(
+    "/unassign",
+    response_model=MessageResponse,
+    summary="Remove a role from a user",
+    dependencies=[Depends(RequirePermission("iam:manage_roles"))],
+    responses={404: {"description": "User or role not found"}},
+)
+def unassign_role(payload: AssignRoleRequest, db: Session = Depends(get_db)) -> MessageResponse:
+    user = db.get(User, payload.user_id)
+    role = _get_role_or_404(db, payload.role_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    if role in user.roles:
+        user.roles.remove(role)
+        db.commit()
+    return MessageResponse(message=f"Role '{role.name}' removed from user {user.id}")
+
+
+
 @router.get(
     "/{role_id}",
     response_model=RoleWithPermissionsResponse,
@@ -94,44 +134,3 @@ def delete_role(role_id: int, db: Session = Depends(get_db)) -> MessageResponse:
     db.delete(role)
     db.commit()
     return MessageResponse(message=f"Role {role_id} deleted")
-
-
-# =========================================================================
-# Assignment: attach/detach a role to/from a user
-# =========================================================================
-@router.post(
-    "/assign",
-    response_model=MessageResponse,
-    summary="Assign a role to a user",
-    dependencies=[Depends(RequirePermission("iam:manage_roles"))],
-    responses={404: {"description": "User or role not found"}},
-)
-def assign_role(payload: AssignRoleRequest, db: Session = Depends(get_db)) -> MessageResponse:
-    user = db.get(User, payload.user_id)
-    role = _get_role_or_404(db, payload.role_id)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    if role not in user.roles:
-        user.roles.append(role)
-        db.commit()
-    return MessageResponse(message=f"Role '{role.name}' assigned to user {user.id}")
-
-
-@router.delete(
-    "/unassign",
-    response_model=MessageResponse,
-    summary="Remove a role from a user",
-    dependencies=[Depends(RequirePermission("iam:manage_roles"))],
-    responses={404: {"description": "User or role not found"}},
-)
-def unassign_role(payload: AssignRoleRequest, db: Session = Depends(get_db)) -> MessageResponse:
-    user = db.get(User, payload.user_id)
-    role = _get_role_or_404(db, payload.role_id)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    if role in user.roles:
-        user.roles.remove(role)
-        db.commit()
-    return MessageResponse(message=f"Role '{role.name}' removed from user {user.id}")
