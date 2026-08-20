@@ -22,7 +22,7 @@ from src.models.IAM import User
 from src.models.pharmacy import Medication, MedicationBatch
 from src.schemas.IAM import MessageResponse
 from src.schemas.pharmacy import (
-    MedicationBatchAdjust,
+    MedicationBatchUpdate,
     MedicationBatchCreate,
     MedicationBatchResponse,
     MedicationCreate,
@@ -224,7 +224,7 @@ def list_expiring_batches(
     dependencies=[Depends(RequirePermission("pharmacy:manage_inventory"))],
     responses={404: {"description": "Batch not found"}},
 )
-def adjust_medication_batch(batch_id: int, payload: MedicationBatchAdjust, db: Session = Depends(get_db)) -> MedicationBatch:
+def adjust_medication_batch(batch_id: int, payload: MedicationBatchUpdate, db: Session = Depends(get_db)) -> MedicationBatch:
     batch = db.get(MedicationBatch, batch_id)
     if batch is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch not found")
