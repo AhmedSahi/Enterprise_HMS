@@ -453,3 +453,404 @@ def update_admission_status(
     db.commit()
     db.refresh(admission)
     return admission
+
+
+    # =========================================================================
+# DISCHARGE SUMMARIES
+# =========================================================================
+@router.post(
+    "/discharge-summaries",
+    response_model=DischargeSummaryResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Write a discharge summary",
+    description="Also finalizes the admission (status -> discharged) and frees the bed, if not already done.",
+    dependencies=[Depends(RequirePermission("clinical:manage_admissions"))],
+    responses={400: {"description": "A discharge summary already exists for this admission"}, 404: {"description": "Admission not found"}},
+)
+def create_discharge_summary(payload: DischargeSummaryCreate, db: Session = Depends(get_db)) -> DischargeSummary:
+    admission = db.get(Admission, payload.admission_id)
+    if admission is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admission not found")
+    if admission.discharge_summary is not None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A discharge summary already exists for this admission")
+    if payload.discharged_by_doctor_id is not None:
+        _get_doctor_staff_or_404(db, payload.discharged_by_doctor_id)
+
+    summary = DischargeSummary(**payload.model_dump())
+    db.add(summary)
+
+    if admission.status == AdmissionStatusEnum.ADMITTED:
+        admission.status = AdmissionStatusEnum.DISCHARGED
+        admission.discharge_date = datetime.now()
+        bed = db.get(Bed, admission.bed_id)
+        if bed is not None:
+            bed.is_occupied = False
+
+    db.commit()
+    db.refresh(summary)
+    return summary
+
+
+@router.get(
+    "/discharge-summaries/{admission_id}",
+    response_model=DischargeSummaryResponse,
+    summary="Get the discharge summary for an admission",
+    responses={403: {"description": "Not this admission's patient or doctor"}, 404: {"description": "No discharge summary found"}},
+)
+def get_discharge_summary(
+    admission_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> DischargeSummary:
+    admission = db.get(Admission, admission_id)
+    if admission is None or admission.discharge_summary is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No discharge summary found for this admission")
+    assert_clinical_access(db, current_user, admission.patient_id)
+    return admission.discharge_summary
+
+
+# =========================================================================
+# VITALS
+# =========================================================================
+@router.post(
+    "/vitals",
+    response_model=VitalsLogResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record a patient's vitals",
+    dependencies=[Depends(RequirePermission("clinical:manage_vitals"))],
+    responses={403: {"description": "Not this patient's treating doctor"}, 404: {"description": "Patient not found"}},
+)
+def record_vitals(
+    payload: VitalsLogCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> VitalsLog:
+    _get_patient_or_404(db, payload.patient_id)
+    assert_clinical_access(db, current_user, payload.patient_id)
+
+    vitals = VitalsLog(**payload.model_dump(), recorded_by=current_user.id)
+    db.add(vitals)
+    db.commit()
+    db.refresh(vitals)
+    return vitals
+
+
+@router.get(
+    "/vitals",
+    response_model=list[VitalsLogResponse],
+    summary="List vitals for a patient",
+    responses={403: {"description": "Not this patient's treating doctor"}, 404: {"description": "Patient not found"}},
+)
+def list_vitals(
+    patient_id: int = Query(...),
+    admission_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[VitalsLog]:
+    _get_patient_or_404(db, patient_id)
+    assert_clinical_access(db, current_user, patient_id)
+
+    query = db.query(VitalsLog).filter(VitalsLog.patient_id == patient_id)
+    if admission_id is not None:
+        query = query.filter(VitalsLog.admission_id == admission_id)
+    return query.order_by(VitalsLog.recorded_at.desc()).all()
+
+
+# =========================================================================
+# SURGERY (Operation Theater scheduling)
+# =========================================================================
+@router.post(
+    "/ot-schedules",
+    response_model=OTScheduleResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Book a surgery slot",
+    description="Rejects overlapping bookings for the same operation theater.",
+    dependencies=[Depends(RequirePermission("clinical:manage_surgery"))],
+    responses={400: {"description": "OT already booked for an overlapping time"}, 404: {"description": "OT, patient, or surgeon not found"}},
+)
+def create_ot_schedule(payload: OTScheduleCreate, db: Session = Depends(get_db)) -> OTSchedule:
+    ot = db.get(OperationTheater, payload.ot_id)
+    if ot is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Operation theater not found")
+    _get_patient_or_404(db, payload.patient_id)
+    if payload.lead_surgeon_id is not None:
+        _get_doctor_staff_or_404(db, payload.lead_surgeon_id)
+
+    overlapping = db.query(OTSchedule).filter(
+        OTSchedule.ot_id == payload.ot_id,
+        OTSchedule.status.notin_([OTScheduleStatusEnum.CANCELLED]),
+        OTSchedule.scheduled_start < payload.scheduled_end,
+        payload.scheduled_start < OTSchedule.scheduled_end,
+    ).first()
+    if overlapping:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This operation theater is already booked for an overlapping time")
+
+    ot_schedule = OTSchedule(**payload.model_dump())
+    db.add(ot_schedule)
+    db.commit()
+    db.refresh(ot_schedule)
+    return ot_schedule
+
+
+@router.get(
+    "/ot-schedules/{ot_schedule_id}",
+    response_model=OTScheduleResponse,
+    summary="Get a single surgery booking",
+    responses={404: {"description": "Not found"}},
+)
+def get_ot_schedule(
+    ot_schedule_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> OTSchedule:
+    ot_schedule = db.get(OTSchedule, ot_schedule_id)
+    if ot_schedule is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Surgery booking not found")
+    return ot_schedule
+
+
+@router.patch(
+    "/ot-schedules/{ot_schedule_id}/status",
+    response_model=OTScheduleResponse,
+    summary="Update a surgery's status",
+    dependencies=[Depends(RequirePermission("clinical:manage_surgery"))],
+    responses={404: {"description": "Not found"}},
+)
+def update_ot_schedule_status(ot_schedule_id: int, payload: OTScheduleStatusUpdate, db: Session = Depends(get_db)) -> OTSchedule:
+    ot_schedule = db.get(OTSchedule, ot_schedule_id)
+    if ot_schedule is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Surgery booking not found")
+    ot_schedule.status = payload.status
+    db.commit()
+    db.refresh(ot_schedule)
+    return ot_schedule
+
+
+@router.post(
+    "/ot-schedules/{ot_schedule_id}/team",
+    response_model=OTTeamMemberResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a team member to a scheduled surgery",
+    dependencies=[Depends(RequirePermission("clinical:manage_surgery"))],
+    responses={400: {"description": "This staff member already holds this role in this surgery"}, 404: {"description": "Surgery or staff member not found"}},
+)
+def add_ot_team_member(ot_schedule_id: int, payload: OTTeamMemberCreate, db: Session = Depends(get_db)) -> OTTeamMember:
+    if db.get(OTSchedule, ot_schedule_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Surgery booking not found")
+    if payload.ot_schedule_id != ot_schedule_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ot_schedule_id in the URL and body must match")
+    if db.get(StaffDetails, payload.staff_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Staff member not found")
+
+    duplicate = db.query(OTTeamMember).filter(
+        OTTeamMember.ot_schedule_id == ot_schedule_id,
+        OTTeamMember.staff_id == payload.staff_id,
+        OTTeamMember.role_in_surgery == payload.role_in_surgery,
+    ).first()
+    if duplicate:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This staff member already holds this role in this surgery")
+
+    member = OTTeamMember(**payload.model_dump())
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    return member
+
+
+@router.get(
+    "/ot-schedules/{ot_schedule_id}/team",
+    response_model=list[OTTeamMemberResponse],
+    summary="List a surgery's team members",
+    responses={404: {"description": "Surgery booking not found"}},
+)
+def list_ot_team(
+    ot_schedule_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> list[OTTeamMember]:
+    if db.get(OTSchedule, ot_schedule_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Surgery booking not found")
+    return db.query(OTTeamMember).filter(OTTeamMember.ot_schedule_id == ot_schedule_id).all()
+
+
+# =========================================================================
+# DIAGNOSES
+# =========================================================================
+@router.post(
+    "/diagnoses",
+    response_model=DiagnosisResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Record a diagnosis for an OPD visit or IPD stay",
+    dependencies=[Depends(RequirePermission("clinical:manage_diagnoses"))],
+    responses={403: {"description": "Not this patient's treating doctor"}, 404: {"description": "Appointment/admission not found"}},
+)
+def create_diagnosis(
+    payload: DiagnosisCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> Diagnosis:
+    patient_id = _resolve_patient_id_from_visit(db, payload.appointment_id, payload.admission_id)
+    assert_clinical_access(db, current_user, patient_id)
+
+    diagnosis = Diagnosis(**payload.model_dump())
+    db.add(diagnosis)
+    db.commit()
+    db.refresh(diagnosis)
+    return diagnosis
+
+
+@router.get(
+    "/diagnoses",
+    response_model=list[DiagnosisResponse],
+    summary="List diagnoses for an appointment or admission",
+    responses={403: {"description": "Not this patient's treating doctor"}, 404: {"description": "Appointment/admission not found"}},
+)
+def list_diagnoses(
+    appointment_id: int | None = Query(default=None),
+    admission_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[Diagnosis]:
+    if appointment_id is None and admission_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide appointment_id or admission_id")
+
+    patient_id = _resolve_patient_id_from_visit(db, appointment_id, admission_id)
+    assert_clinical_access(db, current_user, patient_id)
+
+    query = db.query(Diagnosis)
+    if appointment_id is not None:
+        query = query.filter(Diagnosis.appointment_id == appointment_id)
+    if admission_id is not None:
+        query = query.filter(Diagnosis.admission_id == admission_id)
+    return query.all()
+
+
+def _resolve_patient_id_from_visit(db: Session, appointment_id: int | None, admission_id: int | None) -> int:
+    """Looks up which patient an appointment_id/admission_id belongs to, for access-control checks."""
+    if appointment_id is not None:
+        appointment = db.get(Appointment, appointment_id)
+        if appointment is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
+        return appointment.patient_id
+    if admission_id is not None:
+        admission = db.get(Admission, admission_id)
+        if admission is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admission not found")
+        return admission.patient_id
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Provide appointment_id or admission_id")
+
+
+# =========================================================================
+# PRESCRIPTIONS (with real pharmacy stock deduction)
+# =========================================================================
+@router.post(
+    "/prescriptions",
+    response_model=PrescriptionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Write a prescription (deducts real pharmacy stock)",
+    description=(
+        "Every item's quantity is deducted from stock using FEFO (first-expiring-first-out) "
+        "across that medication's non-expired batches. If ANY item doesn't have enough total "
+        "stock, the ENTIRE prescription is rejected — nothing is partially deducted."
+    ),
+    dependencies=[Depends(RequirePermission("clinical:manage_prescriptions"))],
+    responses={
+        400: {"description": "Insufficient stock for one or more items"},
+        403: {"description": "Not this patient's treating doctor"},
+        404: {"description": "Appointment/admission/patient/medication not found"},
+    },
+)
+def create_prescription(
+    payload: PrescriptionCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> Prescription:
+    visit_patient_id = _resolve_patient_id_from_visit(db, payload.appointment_id, payload.admission_id)
+    if visit_patient_id != payload.patient_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="patient_id does not match the patient on the referenced appointment/admission",
+        )
+    assert_clinical_access(db, current_user, payload.patient_id)
+
+    doctor = get_own_staff_record(db, current_user)
+    doctor_id = doctor.id if doctor is not None and doctor.staff_type == StaffTypeEnum.DOCTOR else None
+
+    # --- Validate every item's stock BEFORE deducting anything (atomicity) ---
+    plans: list[tuple[PrescriptionItem, list[tuple[MedicationBatch, int]]]] = []
+    for item in payload.items:
+        medication = db.get(Medication, item.medication_id)
+        if medication is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Medication {item.medication_id} not found")
+
+        batches = (
+            db.query(MedicationBatch)
+            .filter(MedicationBatch.medication_id == item.medication_id, MedicationBatch.expiry_date > date.today())
+            .order_by(MedicationBatch.expiry_date.asc())  # FEFO
+            .all()
+        )
+        remaining = item.quantity
+        deduction_plan: list[tuple[MedicationBatch, int]] = []
+        for batch in batches:
+            if remaining <= 0:
+                break
+            take = min(batch.quantity_available, remaining)
+            if take > 0:
+                deduction_plan.append((batch, take))
+                remaining -= take
+
+        if remaining > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Insufficient stock for '{medication.name}': short by {remaining} unit(s)",
+            )
+
+        plans.append((item, deduction_plan))
+
+    # --- Everything validated OK — now actually create the prescription and deduct stock ---
+    prescription = Prescription(
+        appointment_id=payload.appointment_id,
+        admission_id=payload.admission_id,
+        doctor_id=doctor_id,
+        patient_id=payload.patient_id,
+        notes=payload.notes,
+    )
+    db.add(prescription)
+    db.flush()
+
+    for item, deduction_plan in plans:
+        db.add(
+            PrescriptionItem(
+                prescription_id=prescription.id,
+                medication_id=item.medication_id,
+                dosage_instructions=item.dosage_instructions,
+                duration_days=item.duration_days,
+                quantity=item.quantity,
+            )
+        )
+        for batch, take in deduction_plan:
+            batch.quantity_available -= take
+
+    db.commit()
+    db.refresh(prescription)
+    return prescription
+
+
+@router.get(
+    "/prescriptions",
+    response_model=list[PrescriptionResponse],
+    summary="List prescriptions for a patient",
+    responses={403: {"description": "Not this patient's treating doctor"}, 404: {"description": "Patient not found"}},
+)
+def list_prescriptions(
+    patient_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[Prescription]:
+    _get_patient_or_404(db, patient_id)
+    assert_clinical_access(db, current_user, patient_id)
+    return db.query(Prescription).filter(Prescription.patient_id == patient_id).all()
+
+
+@router.get(
+    "/prescriptions/{prescription_id}",
+    response_model=PrescriptionResponse,
+    summary="Get a single prescription with its items",
+    responses={403: {"description": "Not this patient's treating doctor"}, 404: {"description": "Prescription not found"}},
+)
+def get_prescription(
+    prescription_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> Prescription:
+    prescription = db.get(Prescription, prescription_id)
+    if prescription is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prescription not found")
+    assert_clinical_access(db, current_user, prescription.patient_id)
+    return prescription

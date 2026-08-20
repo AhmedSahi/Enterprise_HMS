@@ -12,7 +12,8 @@ from src.api.v1 import (
     permissions,
     staff_patients,
     infrastructure,
-    pharmacy
+    pharmacy,
+    clinical
 )
 
 # FastAPI app initialize karein
@@ -32,3 +33,4 @@ app.include_router(audit.router, prefix="/api/v1")
 app.include_router(staff_patients.router, prefix="/api/v1")
 app.include_router(infrastructure.router, prefix="/api/v1")
 app.include_router(pharmacy.router, prefix="/api/v1")
+app.include_router(clinical.router, prefix="/api/v1")
