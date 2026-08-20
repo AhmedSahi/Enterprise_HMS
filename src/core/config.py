@@ -1,4 +1,6 @@
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 
 class Settings(BaseSettings):
     """Load and validate environment variables."""
@@ -8,7 +10,9 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    class Config:
-        env_file = ".env"
+    model_config = ConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
+
+
+
