@@ -46,6 +46,17 @@ DEFAULT_PERMISSIONS = [
     ("Manage Rooms", "infrastructure:manage_rooms"),
     ("Manage Beds", "infrastructure:manage_beds"),
     ("Manage Operation Theaters", "infrastructure:manage_ot"),
+    # Module 4: Clinical & IPD
+    ("Manage Schedules", "clinical:manage_schedules"),
+    ("Manage Appointments", "clinical:manage_appointments"),
+    ("Manage Admissions", "clinical:manage_admissions"),
+    ("Manage Vitals", "clinical:manage_vitals"),
+    ("Manage Surgery", "clinical:manage_surgery"),
+    ("Manage Diagnoses", "clinical:manage_diagnoses"),
+    ("Manage Prescriptions", "clinical:manage_prescriptions"),
+    # Module 5: Pharmacy & Inventory
+    ("Manage Pharmacy Catalog", "pharmacy:manage_catalog"),
+    ("Manage Pharmacy Inventory", "pharmacy:manage_inventory")
 ]
 
 

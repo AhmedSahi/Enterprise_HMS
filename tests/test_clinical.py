@@ -5,33 +5,39 @@ from tests.conftest import signup_plain_user
 
 
 def _grant_doctor_permissions(client, auth_headers, user_id: int) -> None:
-    """
-    Ensures a 'doctor' role exists with the clinical permissions a doctor
-    needs, and assigns it to the given user. Real permission checks (like a
-    doctor being 403'd without any role) are exactly what RequirePermission
-    is supposed to do — so test doctors must be explicitly granted access,
-    same as in a real deployment.
-    """
+    # 1. Fetch or Create Doctor Role
     roles = client.get("/api/v1/roles", headers=auth_headers).json()
     doctor_role = next((r for r in roles if r["name"] == "doctor"), None)
+    
     if doctor_role is None:
-        doctor_role = client.post("/api/v1/roles", json={"name": "doctor", "description": "Treating physician"}, headers=auth_headers).json()
+        doctor_role = client.post(
+            "/api/v1/roles", 
+            json={"name": "doctor", "description": "Treating physician"}, 
+            headers=auth_headers
+        ).json()
 
-        needed_codes = {
-            "clinical:manage_appointments", "clinical:manage_admissions", "clinical:manage_vitals",
-            "clinical:manage_surgery", "clinical:manage_diagnoses", "clinical:manage_prescriptions",
-            "profiles:manage_patient_allergies", "profiles:manage_medical_history",
-        }
-        all_perms = client.get("/api/v1/permissions", headers=auth_headers).json()
-        for perm in all_perms:
-            if perm["code"] in needed_codes:
-                client.post(
-                    "/api/v1/permissions/assign",
-                    json={"role_id": doctor_role["id"], "permission_id": perm["id"]},
-                    headers=auth_headers,
-                )
+    # 2. Permissions HAMESHA assign karein (if condition ke BAHAR)
+    needed_codes = {
+        "clinical:manage_appointments", "clinical:manage_admissions", "clinical:manage_vitals",
+        "clinical:manage_surgery", "clinical:manage_diagnoses", "clinical:manage_prescriptions",
+        "profiles:manage_patient_allergies", "profiles:manage_medical_history",
+    }
+    
+    all_perms = client.get("/api/v1/permissions", headers=auth_headers).json()
+    for perm in all_perms:
+        if perm["code"] in needed_codes:
+            client.post(
+                "/api/v1/permissions/assign",
+                json={"role_id": doctor_role["id"], "permission_id": perm["id"]},
+                headers=auth_headers,
+            )
 
-    client.post("/api/v1/roles/assign", json={"user_id": user_id, "role_id": doctor_role["id"]}, headers=auth_headers)
+    # 3. User ko Role assign karein
+    client.post(
+        "/api/v1/roles/assign", 
+        json={"user_id": user_id, "role_id": doctor_role["id"]}, 
+        headers=auth_headers
+    )
 
 
 def _setup_doctor_and_patient(client, auth_headers, doctor_email="doc@hms.com", patient_email="pat@hms.com"):
@@ -40,11 +46,11 @@ def _setup_doctor_and_patient(client, auth_headers, doctor_email="doc@hms.com", 
     _grant_doctor_permissions(client, auth_headers, doc_user["id"])
     staff = client.post(
         "/api/v1/staff",
-        json={"user_id": doc_user["id"], "employee_code": "D1", "staff_type": "doctor", "license_number": "L1"},
+        json={"user_id": doc_user["id"], "employee_code": f"EMP-{doc_user['id']}", "staff_type": "doctor", "license_number": f"LIC-{doc_user['id']}"},
         headers=auth_headers,
     ).json()
     patient = client.post(
-        "/api/v1/patients", json={"user_id": pat_user["id"], "patient_code": "MRN-1", "blood_group": "O+"}, headers=auth_headers
+        "/api/v1/patients", json={"user_id": pat_user["id"], "patient_code": f"MRN-{pat_user['id']}", "blood_group": "O+"}, headers=auth_headers
     ).json()
     return staff, patient
 
@@ -260,8 +266,8 @@ def test_doctor_can_only_diagnose_own_patients(client, auth_headers):
     appt_headers = _login(client, "diag_pat@hms.com")
     appt = client.post(
         "/api/v1/appointments",
-        json={"doctor_id": staff_a["id"], "appointment_date": _tomorrow(), "appointment_time": "09:00:00"},
-        headers=appt_headers,
+        json={"doctor_id": staff_a["id"], "patient_id": patient["id"], "appointment_date": _tomorrow(), "appointment_time": "09:00:00"},
+        headers=auth_headers,
     ).json()
 
     doc_a_headers = _login(client, "diag_doc_a@hms.com")
@@ -270,7 +276,10 @@ def test_doctor_can_only_diagnose_own_patients(client, auth_headers):
         json={"appointment_id": appt["id"], "icd_code": "J00", "description": "Common cold"},
         headers=doc_a_headers,
     )
+
     assert ok.status_code == 201
+
+    
 
     doc_b_headers = _login(client, "diag_doc_b@hms.com")
     blocked = client.post(
@@ -289,8 +298,8 @@ def _setup_prescription_context(client, auth_headers, doctor_email="rx_doc@hms.c
     appt_headers = _login(client, patient_email)
     appt = client.post(
         "/api/v1/appointments",
-        json={"doctor_id": staff["id"], "appointment_date": _tomorrow(), "appointment_time": "09:00:00"},
-        headers=appt_headers,
+        json={"doctor_id": staff["id"], "patient_id": patient["id"], "appointment_date": _tomorrow(), "appointment_time": "09:00:00"},
+        headers=auth_headers,
     ).json()
     return staff, patient, appt
 
@@ -324,6 +333,7 @@ def test_prescription_deducts_stock_fefo(client, auth_headers):
         },
         headers=doc_headers,
     )
+
     assert resp.status_code == 201
 
     # FEFO: the 5-unit SOON batch should be fully drained first, then 5 more taken from FAR

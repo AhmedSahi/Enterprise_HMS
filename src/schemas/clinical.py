@@ -40,6 +40,7 @@ class AppointmentCreate(BaseModel):
     doctor_id: int
     appointment_date: date
     appointment_time: time
+    patient_id: int | None = None
     duration_minutes: int = Field(default=30, gt=0)
 
 
@@ -175,6 +176,7 @@ class DiagnosisCreate(BaseModel):
     """Exactly one of appointment_id / admission_id must be provided."""
     appointment_id: int | None = None
     admission_id: int | None = None
+    # patient_id: int | None = None
     icd_code: str = Field(..., max_length=20)
     description: str = Field(..., max_length=255)
 

@@ -4,7 +4,7 @@ Covers: medication catalog and batch-level stock (with expiry).
 """
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class MedicationCreate(BaseModel):
@@ -35,6 +35,13 @@ class MedicationBatchCreate(BaseModel):
     expiry_date: date
     quantity_available: int = Field(..., ge=0)
     supplier_name: str | None = Field(default=None, max_length=200)
+
+    @field_validator("expiry_date")
+    @classmethod
+    def validate_expiry_date(cls, v: date) -> date:
+        if v <= date.today():
+            raise ValueError("Expiry date must be in the future")
+        return v
 
 
 class MedicationBatchUpdate(BaseModel):
