@@ -56,7 +56,15 @@ DEFAULT_PERMISSIONS = [
     ("Manage Prescriptions", "clinical:manage_prescriptions"),
     # Module 5: Pharmacy & Inventory
     ("Manage Pharmacy Catalog", "pharmacy:manage_catalog"),
-    ("Manage Pharmacy Inventory", "pharmacy:manage_inventory")
+    ("Manage Pharmacy Inventory", "pharmacy:manage_inventory"),
+    # Module 6: Billing & Finance
+    ("Manage Invoices", "billing:manage_invoices"),
+    ("View Invoices", "billing:view_invoices"),
+    ("Manage Insurance", "billing:manage_insurance"),
+    # Module 7: Blood Bank
+    ("Manage Blood Inventory", "bloodbank:manage_inventory"),
+    ("Submit Blood Request", "bloodbank:request"),
+    ("Approve Blood Request", "bloodbank:approve"),
 ]
 
 

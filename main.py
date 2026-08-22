@@ -14,7 +14,8 @@ from src.api.v1 import (
     infrastructure,
     pharmacy,
     clinical,
-    billing
+    billing,
+    blood_bank
 )
 
 # FastAPI app initialize karein
@@ -36,3 +37,4 @@ app.include_router(infrastructure.router, prefix="/api/v1")
 app.include_router(pharmacy.router, prefix="/api/v1")
 app.include_router(clinical.router, prefix="/api/v1")
 app.include_router(billing.router, prefix="/api/v1")
+app.include_router(blood_bank.router, prefix="/api/v1")
