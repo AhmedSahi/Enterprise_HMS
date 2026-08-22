@@ -53,7 +53,14 @@ DEFAULT_PERMISSIONS = [
     ("Manage Diagnoses", "clinical:manage_diagnoses"),
     ("Manage Prescriptions", "clinical:manage_prescriptions"),
     ("Manage Pharmacy Catalog", "pharmacy:manage_catalog"),
-    ("Manage Pharmacy Inventory", "pharmacy:manage_inventory")
+    ("Manage Pharmacy Inventory", "pharmacy:manage_inventory"),
+    ("Manage Invoices", "billing:manage_invoices"),
+    ("View Invoices", "billing:view_invoices"),
+    ("Manage Insurance", "billing:manage_insurance"),
+    ("Manage Blood Inventory", "bloodbank:manage_inventory"),
+    ("Submit Blood Request", "bloodbank:request"),
+    ("Approve Blood Request", "bloodbank:approve"),
+    ("View All Patient Clinical Records (override)", "clinical:view_all_patient_records"),
     
 ]
 
