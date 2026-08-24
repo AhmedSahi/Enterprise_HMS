@@ -1,4 +1,4 @@
-"""Tests for Module 1: Authentication endpoints."""
+"""Test for Module 1: Authentication endpoints."""
 import pytest
 
 from tests.conftest import signup_plain_user
