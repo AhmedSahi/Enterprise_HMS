@@ -92,7 +92,7 @@ def create_blood_request(payload: BloodRequestCreate, db: Session = Depends(get_
     db.commit()
     db.refresh(blood_request)
     return blood_request
-
+    
 
 @router.get(
     "/requests",
