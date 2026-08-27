@@ -139,6 +139,8 @@ def login(payload: UserLogin, request: Request, db: Session = Depends(get_db)) -
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
 
+    #user_role = getattr(user, "role", "SUPER_ADMIN")
+
     access_token = create_access_token(subject=str(user.id))
     refresh_token_str, expires_at = create_refresh_token(subject=str(user.id))
 

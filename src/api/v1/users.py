@@ -118,6 +118,25 @@ def deactivate_user(user_id: int, db: Session = Depends(get_db)) -> MessageRespo
     return MessageResponse(message=f"User {user_id} deactivated")
 
 
+
+
+@router.get(
+    "/me/access",
+    summary="Get my roles and permissions (for frontend RBAC)",
+    description="Returns role names and permission codes for the current user — used by the frontend to decide what to show.",
+)
+def get_my_access(current_user: User = Depends(get_current_user)) -> dict:
+    if current_user.is_superuser:
+        # Superuser bypasses everything on the backend too (see RequirePermission) —
+        # frontend should mirror that with is_superuser, not by matching a role name.
+        return {"is_superuser": True, "roles": [r.name for r in current_user.roles], "permissions": ["*"]}
+    return {
+        "is_superuser": False,
+        "roles": [r.name for r in current_user.roles],
+        "permissions": list({p.code for r in current_user.roles for p in r.permissions}),
+    }
+
+
 # =========================================================================
 # Profile (identity) — GET + PATCH only, created at signup
 # =========================================================================

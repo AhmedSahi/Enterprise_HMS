@@ -3,6 +3,7 @@ from typing import Any, Optional
 import bcrypt
 import jwt
 from src.core.config import settings
+#from src.models.IAM import Permission
 
 def get_password_hash(plain_password: str) -> str:
     pwd_bytes = plain_password.encode("utf-8")
@@ -14,9 +15,28 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     hashed_bytes = hashed_password.encode("utf-8")
     return bcrypt.checkpw(pwd_bytes, hashed_bytes)
 
-def create_access_token(subject: str) -> str:
+# def create_access_token(subject: str) -> str:
+#     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+#     payload = {"sub": str(subject), "exp": expire, "type": "access"}
+#     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+def create_access_token(subject: str, role: str | None = None) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload = {"sub": str(subject), "exp": expire, "type": "access"}
+    
+    payload = {
+        "sub": str(subject), 
+        "exp": expire, 
+        "type": "access"
+    }
+    
+    # Payload mein role attach karein
+    # if role:
+    #     payload["role"] = role
+    #     payload["roles"] = [role]
+          # AuthContext arrays check karta hai toh safe side ke liye
+
+    #payload["permissions"] = permissions or []
+
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 def create_refresh_token(subject: str) -> tuple[str, datetime]:

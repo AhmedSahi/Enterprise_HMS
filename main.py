@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from src.api.v1 import audit
 from src.core.database import engine
 from src.models.base import Base
+from fastapi.middleware.cors import CORSMiddleware
 
 import src.models
 
@@ -24,6 +25,17 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # All routers connection !
